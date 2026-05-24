@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataVault — Cloudflare DB Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #13131a;
+      --surface2: #1c1c27;
+      --border: #2a2a3d;
+      --accent: #7c6af7;
+      --accent2: #4fd1c5;
+      --danger: #fc6b6b;
+      --text: #e8e8f0;
+      --muted: #6b6b8a;
+      --success: #4fd1a0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    /* Ambient glow background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 500px;
+      background: radial-gradient(ellipse, rgba(124,106,247,0.12) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 60px 24px 80px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Header */
+    .header {
+      margin-bottom: 48px;
+    }
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(124,106,247,0.15);
+      border: 1px solid rgba(124,106,247,0.3);
+      color: var(--accent);
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      padding: 4px 12px;
+      border-radius: 100px;
+      margin-bottom: 16px;
+    }
+    .header-badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #fff 30%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .header-sub {
+      color: var(--muted);
+      margin-top: 8px;
+      font-size: 15px;
+    }
+
+    /* Status bar */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 32px;
+      padding: 10px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+    .status-dot.online { background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .status-dot.error { background: var(--danger); }
+    #status-text { flex: 1; }
+    #record-count {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: rgba(124,106,247,0.3); }
+
+    .card-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    /* Form */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    @media (max-width: 500px) {
+      .form-row { grid-template-columns: 1fr; }
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.05em;
+    }
+    input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      padding: 11px 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+    input::placeholder { color: var(--muted); }
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(124,106,247,0.15);
+    }
+
+    /* Config input */
+    .config-input-wrapper {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .config-input-wrapper input {
+      flex: 1;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 11px 20px;
+      border-radius: 10px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      width: 100%;
+      padding: 13px;
+      font-size: 15px;
+      border-radius: 10px;
+    }
+    .btn-primary:hover { background: #6a58e8; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(124,106,247,0.35); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border: none;
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 6px;
+      opacity: 0.6;
+      transition: opacity 0.15s;
+    }
+    .btn-danger:hover { opacity: 1; background: rgba(252,107,107,0.1); }
+
+    /* Save URL button */
+    .btn-save {
+      background: rgba(124,106,247,0.15);
+      color: var(--accent);
+      border: 1px solid rgba(124,106,247,0.3);
+      font-size: 12px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+    .btn-save:hover { background: rgba(124,106,247,0.25); }
+
+    /* Spinner */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Records list */
+    #records {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .record-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      animation: slideIn 0.25s ease;
+      transition: border-color 0.2s;
+    }
+    .record-item:hover { border-color: rgba(124,106,247,0.2); }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .record-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .record-info { flex: 1; min-width: 0; }
+    .record-name {
+      font-weight: 500;
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .record-email {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .record-time {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+    }
+    .empty-state svg { margin-bottom: 12px; opacity: 0.4; }
+    .empty-state p { font-size: 14px; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      z-index: 100;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.25s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success { background: rgba(79,209,160,0.15); border: 1px solid rgba(79,209,160,0.3); color: var(--success); }
+    .toast.error { background: rgba(252,107,107,0.15); border: 1px solid rgba(252,107,107,0.3); color: var(--danger); }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+
+    .records-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="header">
+      <div class="header-badge">CLOUDFLARE DURABLE OBJECTS</div>
+      <h1>DataVault</h1>
+      <p class="header-sub">Store and retrieve records using Cloudflare's edge database.</p>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Connecting…</span>
+      <span id="record-count"></span>
+    </div>
+
+    <!-- Worker URL config -->
+    <div class="card">
+      <div class="card-title">⚙ Worker URL</div>
+      <div class="config-input-wrapper">
+        <input type="url" id="worker-url" placeholder="https://cloudflaredb-pages.YOUR-NAME.workers.dev" />
+        <button class="btn btn-save" onclick="saveUrl()">Save & Connect</button>
+      </div>
+    </div>
+
+    <!-- Add record -->
+    <div class="card">
+      <div class="card-title">+ Add Record</div>
+      <div class="form-row">
+        <div class="input-group">
+          <label>NAME</label>
+          <input id="name" placeholder="John Doe" />
+        </div>
+        <div class="input-group">
+          <label>EMAIL</label>
+          <input id="email" type="email" placeholder="john@example.com" onkeydown="if(event.key==='Enter')addRecord()" />
+        </div>
+      </div>
+      <button class="btn btn-primary" id="add-btn" onclick="addRecord()">
+        Add to Database
+      </button>
+    </div>
+
+    <!-- Records list -->
+    <div class="card">
+      <div class="records-header">
+        <div class="card-title" style="margin-bottom:0">Stored Records</div>
+        <button class="btn btn-ghost" onclick="loadRecords()">↻ Refresh</button>
+      </div>
+      <div id="records">
+        <div class="empty-state">
+          <p>Loading records…</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ── Config ──────────────────────────────────────────────────────
+    const DEFAULT_URL = "https://cloudflaredb-pages.yasir-ali.workers.dev";
+    let WORKER_URL = localStorage.getItem("worker_url") || DEFAULT_URL;
+
+    // Pre-fill the URL input
+    document.getElementById("worker-url").value = WORKER_URL;
+
+    function saveUrl() {
+      const val = document.getElementById("worker-url").value.trim().replace(/\/$/, "");
+      if (!val) return showToast("Enter a valid URL", "error");
+      WORKER_URL = val;
+      localStorage.setItem("worker_url", val);
+      showToast("URL saved!", "success");
+      loadRecords();
+    }
+
+    // ── Toast ────────────────────────────────────────────────────────
+    function showToast(msg, type = "success") {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.className = `toast ${type} show`;
+      setTimeout(() => t.classList.remove("show"), 3000);
+    }
+
+    // ── Status bar ───────────────────────────────────────────────────
+    function setStatus(state, text, count) {
+      const dot = document.getElementById("status-dot");
+      dot.className = `status-dot ${state}`;
+      document.getElementById("status-text").textContent = text;
+      if (count !== undefined) {
+        document.getElementById("record-count").textContent = `${count} record${count !== 1 ? 's' : ''}`;
+      }
+    }
+
+    // ── Add record ───────────────────────────────────────────────────
+    async function addRecord() {
+      const name  = document.getElementById("name").value.trim();
+      const email = document.getElementById("email").value.trim();
+      if (!name || !email) return showToast("Please enter name and email", "error");
+
+      const btn = document.getElementById("add-btn");
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div> Adding…';
+
+      try {
+        const res = await fetch(`${WORKER_URL}/add`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed");
+        document.getElementById("name").value  = "";
+        document.getElementById("email").value = "";
+        showToast(`✓ ${name} added!`, "success");
+        loadRecords();
+      } catch (e) {
+        showToast("Error: " + e.message, "error");
+        setStatus("error", "Connection failed");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = "Add to Database";
+      }
+    }
+
+    // ── Load records ─────────────────────────────────────────────────
+    async function loadRecords() {
+      setStatus("", "Fetching records…");
+      try {
+        const res  = await fetch(`${WORKER_URL}/list`);
+        const data = await res.json();
+        renderRecords(data);
+        setStatus("online", `Connected · ${WORKER_URL.replace("https://", "").split("/")[0]}`, data.length);
+      } catch (e) {
+        setStatus("error", "Cannot reach Worker — check URL above");
+        document.getElementById("records").innerHTML = `
+          <div class="empty-state">
+            <p>⚠ Could not connect.<br>Check the Worker URL above.</p>
+          </div>`;
+      }
+    }
+
+    // ── Render records ────────────────────────────────────────────────
+    function renderRecords(records) {
+      const container = document.getElementById("records");
+      if (!records.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+              <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
+            </svg>
+            <p>No records yet.<br>Add one above!</p>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = records.map(r => {
+        const initials = (r.name || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+        const time = r.addedAt ? new Date(r.addedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+        return `
+          <div class="record-item">
+            <div class="record-avatar">${initials}</div>
+            <div class="record-info">
+              <div class="record-name">${escHtml(r.name)}</div>
+              <div class="record-email">${escHtml(r.email)}</div>
+            </div>
+            ${time ? `<div class="record-time">${time}</div>` : ""}
+          </div>`;
+      }).join("");
+    }
+
+    function escHtml(s) {
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────
+    loadRecords();
+  </script>
+</body>
+</html>
